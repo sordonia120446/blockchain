@@ -1,8 +1,6 @@
 package main
 
 import (
-    "crypto/sha256"
-    "encoding/hex"
     "encoding/json"
     "io"
     "log"
@@ -11,56 +9,15 @@ import (
     "sync"
     "time"
 
+    "blockchain"
+
     "github.com/davecgh/go-spew/spew"
     "github.com/gorilla/mux"
     "github.com/joho/godotenv"
 )
 
-type Block struct {
-    Index     int
-    Timestamp string
-    BPM       int
-    Hash      string
-    PrevHash  string
-}
-
 // Slice of Block
-var Blockchain []Block  // TODO not use global var?
-
-func calculateHash(block Block) string {
-    record := string(block.Index) + block.Timestamp + string(block.BPM) + block.PrevHash
-    h := sha256.New()
-    h.Write([]byte(record))
-    hashed := h.Sum(nil)
-    return hex.EncodeToString(hashed)
-}
-
-func generateBlock(prevBlock Block, BPM int) Block {
-    var newBlock Block
-
-    newBlock.Index = prevBlock.Index + 1
-    newBlock.Timestamp = time.Now().String()
-    newBlock.BPM = BPM
-    newBlock.PrevHash = prevBlock.Hash
-    newBlock.Hash = calculateHash(newBlock)
-    return newBlock
-}
-
-func isValidBlock(newBlock, prevBlock Block) bool {
-    if prevBlock.Index + 1 != newBlock.Index {
-        return false
-    }
-
-    if prevBlock.Hash != newBlock.PrevHash {
-        return false
-    }
-
-    if calculateHash(newBlock) != newBlock.Hash {
-        return false
-    }
-
-    return true
-}
+var Blockchain []blockchain.Block  // TODO not use global var?
 
 // TODO move this web server stuff elsewhere
 var mutex = &sync.Mutex{}
@@ -116,9 +73,9 @@ func handleWriteBlock(res http.ResponseWriter, req *http.Request) {
     defer req.Body.Close()
 
     prevBlock := Blockchain[len(Blockchain)-1]
-    newBlock := generateBlock(prevBlock, msg.BPM)
+    newBlock := blockchain.GenerateBlock(prevBlock, msg.BPM)
 
-    if !isValidBlock(newBlock, Blockchain[len(Blockchain)-1]) {
+    if !blockchain.IsValidBlock(newBlock, Blockchain[len(Blockchain)-1]) {
         respondWithJSON(res, req, http.StatusBadRequest, req.Body)
         return
     }
@@ -154,7 +111,7 @@ func main() {
     // This will work without the go routine but it’s just cleaner this way.
     go func() {
         t := time.Now()
-        genesisBlock := Block{0, t.String(), 0, "", ""}
+        genesisBlock := blockchain.Block{0, t.String(), 0, "", ""}
         spew.Dump(genesisBlock)
 
         mutex.Lock()
